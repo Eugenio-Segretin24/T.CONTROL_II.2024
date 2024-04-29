@@ -2,12 +2,12 @@ clc; clear all; close all;
 
 
 %%Variables de utilidad
-h=0.0001;%%Se extrae de analizar el archivo del profesor
+h=0.0001;
 tiempo=(0.2/h);
 t=0:h:(tiempo*h);
 i=1;
 
-%%Datos del archivo exel
+%Datos del archivo exel
 data = transpose(xlsread('Curvas_Medidas_RLC.csv'));%se transponen los datos porque en el archivo los datos están en columnas, y para separarlos en variables necesitamos esos datos en filas
 t_d=data(1,:);
 I_d=data(2,:);
