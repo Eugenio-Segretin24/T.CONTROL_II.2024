@@ -5,7 +5,7 @@ tF=0.01;A=12;
 color_='r';
 t=0:t_etapa:tF;
 f=300;
-u=A*square(2*pi*f*t); %12 Voltios de señal cuadrada
+u=A*square(2*pi*f*t); %12 Voltios de seÃ±al cuadrada
 plot(t,u),grid on;
  for t=0:t_etapa:tF
   i=i+1;
