@@ -1,0 +1,47 @@
+%ITEM 2 CASO 1
+
+clear all; clc;
+[x1]=xlsread('Curvas_Medidas_RLC.xls'); % Lee datos del archivo Excel
+t0=x1(:,1); % Tiempo (columna 1 del archivo Excel)
+y=x1(:,3); % Tensión en el capacitor (columna 3 del archivo Excel)
+t_off=0.01; % Tiempo de offset
+t_t1=4e-3; % Tiempo t1
+t_inic=t_off+t_t1; % Tiempo inicial ajustado
+[val, lugar] =min(abs(t_inic-t0)); % Encuentra el valor más cercano a t_inic en t0
+y_t1=y(lugar); % Valor de y en t1
+ii=0; % Inicializa contador
+ii=ii+1;
+t_2t1=2*t_t1; % Doble de t1
+t_inic=t_off+t_2t1; % Tiempo inicial ajustado para 2t1
+[val, lugar] =min(abs(t_inic-t0)); % Encuentra el valor más cercano a t_inic en t0
+y_2t1=y(lugar); % Valor de y en 2t1
+t_3t1=3*t_t1; % Triple de t1
+t_inic=t_off+t_3t1; % Tiempo inicial ajustado para 3t1
+[val, lugar] =min(abs(t_inic-t0)); % Encuentra el valor más cercano a t_inic en t0
+y_3t1=y(lugar); % Valor de y en 3t1
+[val,lugar] =min(abs(0.049-t0)); % Encuentra el valor más cercano a 0.049 en t0
+K=y(lugar)/12; % Ganancia del sistema
+k1=(1/12)*y_t1/K-1; % Cálculo del parámetro k1
+k2=(1/12)*y_2t1/K-1; % Cálculo del parámetro k2
+k3=(1/12)*y_3t1/K-1; % Cálculo del parámetro k3
+be=4*k1^3*k3-3*k1^2*k2^2-4*k2^3+k3^2+6*k1*k2*k3; % Parámetro beta
+alfa1=(k1*k2+k3-sqrt(be))/(2*(k1^2+k2)); % Cálculo de alfa1
+alfa2=(k1*k2+k3+sqrt(be))/(2*(k1^2+k2)); % Cálculo de alfa2
+beta=(k1+alfa2)/(alfa1-alfa2); % Cálculo de beta
+T1_ang=-t_t1/log(alfa1); % Cálculo de T1
+T2_ang=-t_t1/log(alfa2); % Cálculo de T2
+T3_ang=beta*(T1_ang-T2_ang)+T1_ang; % Cálculo de T3
+T1(ii)=T1_ang; % Almacena T1
+T2(ii)=T2_ang; % Almacena T2
+T3(ii)=T3_ang; % Almacena T3
+T3_ang=sum(T3/length(T3)); % Promedio de T3
+T2_ang=sum(T2/length(T2)); % Promedio de T2
+T1_ang=sum(T1/length(T1)); % Promedio de T1
+sys_G_ang=tf(K,conv([T1_ang 1],[T2_ang 1])); % Función de transferencia del sistema
+[yo,to]=step(12*sys_G_ang,0.05-t_off); % Respuesta al escalón del sistema
+plot(t0,y,'r'), hold on % Grafica los datos originales
+grid on; 
+plot(t_t1+0.01,y_t1,'o'); % Marca el punto t1
+plot(t_2t1+0.01,y_2t1,'o'); % Marca el punto 2t1
+plot(t_3t1+0.01,y_3t1,'o'),hold on % Marca el punto 3t1
+plot(to+t_off,yo), axis([0 0.1 -13 13]); % Grafica la respuesta simulada
