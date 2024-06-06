@@ -1,0 +1,55 @@
+clear all; clc;
+
+% Inicialización de variables
+X = -[0; 0; 0]; % Estado inicial del sistema (vectores de estados)
+ii = 0; % Índice de iteración
+t_etapa = 1e-7; % Paso de tiempo para la simulación
+TitaRef = pi/2; % Referencia de ángulo deseada
+tF = 50e-3; % Tiempo final de simulación
+torque = 0 * 1.15e-3; % Torque aplicado al motor (aquí está multiplicado por cero, lo que hace que el torque sea cero)
+
+% Constantes del controlador PID
+Kp = 30; % Ganancia proporcional
+Ki = 0.1; % Ganancia integral
+Kd = 0; % Ganancia derivativa
+Ts = t_etapa; % Periodo de muestreo
+
+% Coeficientes del controlador PID
+A1 = ((2 * Kp * Ts) + (Ki * (Ts^2)) + (2 * Kd)) / (2 * Ts);
+B1 = (-2 * Kp * Ts + Ki * (Ts^2) - 4 * Kd) / (2 * Ts);
+C1 = Kd / Ts;
+
+% Inicialización de la señal de control
+u = 0;
+
+% Bucle de simulación
+for t = 0:t_etapa:tF
+    ii = ii + 1; % Incrementa el índice de iteración
+    k = ii + 2; % Índice para el cálculo del error
+    X = ModMotor1(t_etapa, X, u, torque); % Simula el motor con el modelo ModMotor1
+    e(k) = TitaRef - X(3); % Calcula el error entre la referencia y el estado actual del ángulo
+    u = u + A1 * e(k) + B1 * e(k-1) + C1 * e(k-2); % Calcula la señal de control usando el controlador PID
+    
+    % Almacena los resultados de la simulación
+    x1(ii) = X(1); % Corriente I_a
+    x2(ii) = X(2); % Velocidad angular \omega
+    x3(ii) = X(3); % Ángulo \tita
+    acc(ii) = u; % Señal de control u
+end
+
+% Vector de tiempo para las gráficas
+t = 0:t_etapa:tF;
+
+% Gráficas de resultados
+subplot(4,1,1); hold on;
+plot(t, x1); title('Salida y, Corriente I_a');
+
+subplot(4,1,2); hold on;
+plot(t, x2); title('Salida y, \omega_t');
+xlabel('Tiempo [Seg.]');
+
+subplot(4,1,3); hold on;
+plot(t, x3); title('Salida y, \tita_t');
+
+subplot(4,1,4); hold on;
+plot(t, acc); title('Entrada u_t, v_a');
