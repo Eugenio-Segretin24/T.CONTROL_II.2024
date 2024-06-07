@@ -1,0 +1,88 @@
+clear; close all; clc;
+
+% Inicialización de parámetros y variables
+X = [0; 0; 0]; % Vector de estado inicial [i_a, omega, theta]
+t_etapa = 1e-5; % Paso de tiempo para la simulación
+tF = 10; % Tiempo final de simulación
+t = 0:t_etapa:tF; % Vector de tiempo
+u = 0; % Entrada inicial
+n = length(t); % Número de pasos de tiempo
+TL = (((1.15e-3)/2) * (square(2*pi*0.25*(t))) + (1.15e-3)/2) .* (t >= 1); % Torque aplicado
+
+% Referencia del ángulo (cambiando cada 2 segundos)
+titaRef = ((pi/2) * square(2*pi*0.25*(t))) .* (t >= 0);
+
+% Constantes del controlador PID
+Kp = 5; Ki = 200; Kd = 5e-5;
+
+% Coeficientes del controlador PID
+Ts = t_etapa; % Periodo de muestreo
+A1 = ((2 * Kp * Ts) + (Ki * (Ts^2)) + (2 * Kd)) / (2 * Ts);
+B1 = (-2 * Kp * Ts + Ki * (Ts^2) - 4 * Kd) / (2 * Ts);
+C1 = Kd / Ts;
+
+% Inicialización de los vectores de almacenamiento
+e = zeros(n+2, 1); % Vector de errores
+x1 = zeros(n, 1); % Corriente i_a
+x2 = zeros(n, 1); % Velocidad angular omega
+x3 = zeros(n, 1); % Ángulo theta
+acc = zeros(n, 1); % Señal de control
+
+% Bucle de simulación
+for ii = 1:n
+    if titaRef(ii) == -pi/2
+        TL(ii) = 0; % Torque es nulo cuando titaRef es -pi/2
+    end
+    
+    % Simulación del motor 
+    X = modmotor_7(t_etapa, X, [u; TL(ii)]);
+    
+    % Cálculo del error
+    e(ii+2) = titaRef(ii) - X(3);
+    
+    % Cálculo de la señal de control usando PID
+    u = u + A1 * e(ii+2) + B1 * e(ii+1) + C1 * e(ii);
+    
+    % Almacenamiento de los resultados
+    x1(ii) = X(1); % Corriente i_a
+    x2(ii) = X(2); % Velocidad angular omega
+    x3(ii) = X(3); % Ángulo theta
+    acc(ii) = u; % Señal de control
+end
+
+% Gráficas de resultados
+figure;
+
+subplot(4, 1, 1);
+plot(t, x1, 'r');
+title('Corriente I_a');
+xlabel('Tiempo [s]');
+ylabel('I_a [A]');
+grid on;
+
+subplot(4, 1, 2);
+plot(t, x2, 'b');
+title('Velocidad Angular \omega');
+xlabel('Tiempo [s]');
+ylabel('\omega [rad/s]');
+grid on;
+
+subplot(4, 1, 3);
+plot(t, acc, 'r');
+hold on;
+plot(t, 10e3 * TL, 'b');
+title('Señal de Control y Torque');
+xlabel('Tiempo [s]');
+ylabel('u [V], Torque [x10^3 Nm]');
+legend('Señal de Control u', 'Torque (x10^3)');
+grid on;
+
+subplot(4, 1, 4);
+plot(t, x3, 'g');
+hold on;
+plot(t, titaRef, 'y');
+title('Ángulo \theta');
+xlabel('Tiempo [s]');
+ylabel('\theta [rad]');
+legend('Ángulo \theta', 'Referencia \theta');
+grid on;
