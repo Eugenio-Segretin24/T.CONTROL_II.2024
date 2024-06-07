@@ -1,0 +1,68 @@
+clear; close all; clc;
+
+% Parámetros de simulación
+t_etapa = 1e-7; % Paso de tiempo
+tF = 5; % Tiempo final de 5 segundos
+t = 0:t_etapa:tF; % Vector de tiempo
+num_points = length(t); % Número de puntos de tiempo
+
+% Inicialización de estados
+X = [0; 0; 0]; % Estado inicial del sistema
+ii = 0; % Índice de iteración para almacenamiento
+u = 12; % Alimentación de 12V
+V_TL = (t >= 0.3) .* (t - 0.3); % Torque de carga dependiente del tiempo
+w = zeros(1, num_points); % Inicialización de vector de velocidad con torque máximo
+
+% Inicialización de vectores de resultados
+x1 = zeros(1, num_points); % Velocidad angular \omega
+x2 = zeros(1, num_points); % Corriente I_a
+x3 = zeros(1, num_points); % Ángulo \tita
+acc = zeros(1, num_points); % Señal de control u
+torque_max = 0; % Torque máximo soportado
+velocidad_con_torque_max = 0; % Velocidad con torque máximo
+
+% Bucle de simulación
+for t_eu = 0:t_etapa:tF
+    ii = ii + 1; % Incremento del índice de iteración
+    X = ModMotor1(t_etapa, X, [u, V_TL(ii)]); % Simula el motor con el modelo ModMotor1
+
+    % Almacena los resultados de la simulación
+    x1(ii) = X(2); % Velocidad angular \omega
+    x2(ii) = X(1); % Corriente I_a
+    x3(ii) = X(3); % Ángulo \tita
+    acc(ii) = u; % Señal de control u
+
+    % Verifica el torque máximo soportado
+    if x1(ii) >= -0.1 && x1(ii) <= 0.1 && t_eu > 0.1
+        w(ii) = x1(ii);
+        torque_max = V_TL(ii);
+        velocidad_con_torque_max = x1(ii);
+        disp('Torque Max:');
+        disp(torque_max);
+        disp('Velocidad con Torque Max:');
+        disp(velocidad_con_torque_max);
+    end 
+end
+
+% Ajustar el tamaño del vector de tiempo
+t = 0:t_etapa:(ii-1)*t_etapa;
+
+% Gráficas de resultados
+figure;
+subplot(2,1,1); hold on;
+plot(t, x1(1:ii), 'r'); hold on;
+plot(t, w(1:ii));  ylim([-10 2000]); grid on;
+title('Salida y, \omega_t');
+ylabel('Velocidad [rad/s]');
+
+subplot(2,1,2); hold on;
+plot(t, V_TL(1:ii), 'r');
+title('Torque de Carga');
+xlabel('Tiempo [Seg.]');
+ylabel('Torque [Nm]');
+
+% Mostrar resultados máximos en la consola
+disp(['Máxima velocidad angular: ', num2str(max(x1)), ' rad/s']);
+disp(['Máxima corriente: ', num2str(max(x2)), ' A']);
+disp(['Torque máximo soportado: ', num2str(torque_max), ' Nm']);
+disp(['Velocidad con torque máximo: ', num2str(velocidad_con_torque_max), ' rad/s']);
