@@ -1,0 +1,16 @@
+function [X]=ModMotor1(t_etapa, xant, accion, T)
+Laa=366e-6; J=5e-9;Ra=55.6;B=0;Ki=6.49e-3;Km=6.53e-3;
+Va=accion;
+h=1e-8;
+ia= xant(1);
+omega= xant(2);
+tita= xant(3);
+Vh=t_etapa/h;
+for ii=1:Vh
+    iap = -ia*(Ra/Laa) - omega*(Km/Laa) + Va/Laa;
+    wp = ia*(Ki/J) - omega*(B/J) - T/J;
+    ia = ia +h*iap;
+    omega = omega + h*wp;
+    tita = tita + h*omega;
+end
+X=[ia;omega;tita];
