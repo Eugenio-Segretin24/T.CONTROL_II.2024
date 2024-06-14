@@ -87,7 +87,7 @@ while i < length(t)
 
     % Observador de estado
     y_sal_O = Mat_C * x_hat;
-    x_hatp = Mat_A * x_hat + Mat_B * u_O(i) + Ko * (y_sal - y_sal_O);
+    x_hatp = Mat_A * x_hat + Mat_B * u_O(i) + Ko' * (y_sal - y_sal_O);
     x_hat = x_hat + t_etapa * x_hatp;
 
     i = i + 1; % Incremento del índice de iteración
