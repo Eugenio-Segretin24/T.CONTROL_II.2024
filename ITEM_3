@@ -1,39 +1,42 @@
-clear all; clc;
+clear all;
+clc;
 
 % Lee datos del archivo Excel
-[x1] = xlsread('Curvas_Medidas_RLC.xls');
-t0 = x1(:, 1); % Tiempo (columna 1 del archivo Excel)
-i = x1(:, 2); % Corriente en el inductor (columna 2 del archivo Excel)
-y = x1(:, 3); % Tensión en el capacitor (columna 3 del archivo Excel)
+[data] = xlsread('Curvas_Medidas_RLC.xls');
+t0 = data(:, 1); % Tiempo (columna 1 del archivo Excel)
+i_medida = data(:, 2); % Corriente medida en el inductor
+V_aplicada = data(:, 3); % Voltaje aplicado
 
 % Parámetros obtenidos del ítem 2
-R = 47; % Resistencia en ohmios
-L = 1e-3; % Inductancia en henrios
-C = 100e-6; % Capacitancia en faradios
+R = 1; % Resistencia en ohmios
+L = 0.00036786; % Inductancia en henrios
+C = 0.0026916; % Capacitancia en faradios
 
-% Tiempo de simulación y paso de tiempo
-t_sim = linspace(0, max(t0), length(t0)); % Genera un vector de tiempo similar al de los datos experimentales
+% Definición del sistema en variables de estado
+A = [0, 1; -1/(L*C), -R/L];
+B = [0; 1/L];
+C = [1, 0];
+D = 0;
 
-% Cálculo de la función de transferencia del circuito RLC
-num = [1];
-den = [L*C, R*C, 1];
-sys = tf(num, den);
+% Crear el sistema de estado
+sys = ss(A, B, C, D);
 
-% Respuesta a un escalón de 12V
-[u, tu] = step(12*sys, t_sim);
+% Simular la respuesta del sistema con la entrada medida (voltaje aplicado)
+[y_sim, t_sim, x_sim] = lsim(sys, V_aplicada, t0);
 
-% Interpolar los datos de la simulación para que coincidan con los tiempos experimentales
-u_interp = interp1(tu, u, t_sim);
+% La corriente a través del inductor es la segunda variable de estado
+i_simulada = x_sim(:, 2);
 
 % Gráfica de la corriente medida y la simulada
 figure;
-plot(t0, i, 'r', 'LineWidth', 1.5); hold on; % Corriente medida
-plot(t_sim, u_interp, 'b--', 'LineWidth', 1.5); % Corriente simulada
+plot(t0, i_medida, 'r', 'LineWidth', 1.5); hold on; % Corriente medida
+plot(t_sim, i_simulada, 'b', 'LineWidth', 1.5); % Corriente simulada
 xlabel('Tiempo (s)');
 ylabel('Corriente (A)');
-title('Validación de los Parámetros R, L y C');
-legend('Corriente medida', 'Corriente simulada');
+title('Corriente');
+legend('Medida', 'Calculada');
 grid on;
 
-% Ajuste de los ejes para visualizar mejor el proceso
-axis([min(t0) max(t0) min(i) max(i)]);
+% % Ajuste de los ejes para visualizar mejor el proceso
+ xlim([0 max(t0)]);
+ ylim([-0.1 0.1]);
