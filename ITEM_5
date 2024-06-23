@@ -1,18 +1,22 @@
-clear all; clc;
+clear; close all; clc;
 
 % Leer datos del archivo 'Curvas_Medidas_Motor'
-[x1] = xlsread('Curvas_Medidas_Motor');
-t0 = x1(:,1); % Tiempo
-y = x1(:,2); % Velocidad angular
+[x1]=xlsread('Curvas_Medidas_Motor_2024.xls');
+t = x1(:, 1); % Tiempo
+wr = x1(:, 2); % Velocidad angular
+ia = x1(:, 3); % Corriente de armadura
+v_m = x1(:, 4); % Voltaje de entrada
+TL = x1(:, 5); % Torque de carga
 
-% Definir parámetros iniciales
+% Parámetros iniciales
+StepAmplitude = 12;
 t_off = 0.02; % Tiempo de inicio del escalón
-t_t1 = 3e-4; % Tiempo de primer muestra
+t_t1 = 1e-3; % Tiempo de primera muestra
 t_inic = t_off + t_t1;
 
 % Obtener valor de y(t1)
-[val, lugar] = min(abs(t_inic - t0));
-y_t1 = y(lugar);
+[val, lugar] = min(abs(t_inic - t));
+y_t1 = wr(lugar);
 
 % Inicializar variables
 ii = 0;
@@ -21,23 +25,23 @@ ii = ii + 1;
 % Obtener valor de y(2*t1)
 t_2t1 = 2 * t_t1;
 t_inic = t_off + t_2t1;
-[val, lugar] = min(abs(t_inic - t0));
-y_2t1 = y(lugar);
+[val, lugar] = min(abs(t_inic - t));
+y_2t1 = wr(lugar);
 
 % Obtener valor de y(3*t1)
 t_3t1 = 3 * t_t1;
 t_inic = t_off + t_3t1;
-[val, lugar] = min(abs(t_inic - t0));
-y_3t1 = y(lugar);
+[val, lugar] = min(abs(t_inic - t));
+y_3t1 = wr(lugar);
 
 % Obtener valor de K (ganancia del sistema)
-[val, lugar] = min(abs(0.08 - t0));
-K = y(lugar) / 12;
+[val, lugar] = min(abs(0.08 - t));
+K = wr(lugar) / StepAmplitude;
 
 % Cálculo de las constantes de tiempo
-k1 = (1 / 12) * y_t1 / K - 1; % Afecto el valor del escalón
-k2 = (1 / 12) * y_2t1 / K - 1;
-k3 = (1 / 12) * y_3t1 / K - 1;
+k1 = (1 / StepAmplitude) * y_t1 / K - 1;
+k2 = (1 / StepAmplitude) * y_2t1 / K - 1;
+k3 = (1 / StepAmplitude) * y_3t1 / K - 1;
 
 % Cálculo de los coeficientes alfa y beta
 be = 4 * k1^3 * k3 - 3 * k1^2 * k2^2 - 4 * k2^3 + k3^2 + 6 * k1 * k2 * k3;
@@ -58,21 +62,89 @@ T3_ang = sum(T3 / length(T3));
 T2_ang = sum(T2 / length(T2));
 T1_ang = sum(T1 / length(T1));
 
-% Modelo del sistema
+% Modelo del sistema sin torque de carga
 sys_G_ang = tf(K, conv([T1_ang 1], [T2_ang 1]));
+[aux_num_Va, aux_den_Va] = tfdata(sys_G_ang);
+% Crear un vector de tiempo uniforme para la respuesta del escalón
+t_step = linspace(min(t), max(t), length(t));
+y_id = StepAmplitude * step(sys_G_ang, t_step - t_off);
+num_Va = cell2mat(aux_num_Va);
+den_Va = cell2mat(aux_den_Va);
+num_Va(1) = 0;
 
-% Respuesta del sistema a un escalón de 12V
-[yo, to] = step(12 * sys_G_ang, .1 - t_off);
+% Identificación de la FT del sistema con torque de carga
+StepTL = 1e-3;
+t_2 = 0:0.6/(length(t)-1):0.6;
+t_s_TL = t_2(1:16688-16500+1);
+w_s_TL = flip(wr(16500:16688));
+y_TL = w_s_TL; 
+t0_TL = t_s_TL;
+t_inic_TL = 3.707e-5;
+[val_TL, lugar_TL] = min(abs(t_inic_TL - t0_TL));
+y_t1_TL = y_TL(lugar_TL);
+t_t1_TL = t0_TL(lugar_TL);
+ii_TL = 1; 
+[val_TL, lugar_TL] = min(abs(2 * t_inic_TL - t0_TL));
+t_2t1_TL = t0_TL(lugar_TL);
+y_2t1_TL = y_TL(lugar_TL);
+[val_TL, lugar_TL] = min(abs(3 * t_inic_TL - t0_TL));
+t_3t1_TL = t0_TL(lugar_TL);
+y_3t1_TL = y_TL(lugar_TL);
+K_TL = y_TL(end) / StepTL;
+k1_TL = (1 / StepTL) * y_t1_TL / K_TL - 1;
+k2_TL = (1 / StepTL) * y_2t1_TL / K_TL - 1;
+k3_TL = (1 / StepTL) * y_3t1_TL / K_TL - 1;
+be_TL = 4 * k1_TL^3 * k3_TL - 3 * k1_TL^2 * k2_TL^2 - 4 * k2_TL^3 + k3_TL^2 + 6 * k1_TL * k2_TL * k3_TL;
+alfa1_TL = (k1_TL * k2_TL + k3_TL - sqrt(be_TL)) / (2 * (k1_TL^2 + k2_TL));
+alfa2_TL = (k1_TL * k2_TL + k3_TL + sqrt(be_TL)) / (2 * (k1_TL^2 + k2_TL));
+beta_TL = (k1_TL + alfa2_TL) / (alfa1_TL - alfa2_TL);
+
+T1_ang_TL = -t_t1_TL / log(alfa1_TL); 
+T2_ang_TL = -t_t1_TL / log(alfa2_TL); 
+T3_ang_TL = beta_TL * (T1_ang_TL - T2_ang_TL) + T1_ang_TL; 
+T1_TL(ii_TL) = T1_ang_TL; 
+T2_TL(ii_TL) = T2_ang_TL; 
+T3_TL(ii_TL) = T3_ang_TL; 
+T3_ang_TL = real(sum(T3_TL / length(T3_TL))); 
+T2_ang_TL = real(sum(T2_TL / length(T2_TL))); 
+T1_ang_TL = real(sum(T1_TL / length(T1_TL))); 
+sys_G_ang_TL = tf(K_TL * [T3_ang_TL 1], conv([T1_ang_TL 1], [T2_ang_TL 1]));
+[aux_num_TL, aux_den_TL] = tfdata(sys_G_ang_TL);
+y_id_TL = StepTL * step(sys_G_ang_TL, t_s_TL);
+
+num_TL = cell2mat(aux_num_TL);
+den_TL = cell2mat(aux_den_TL);
 
 % Graficar resultados
 figure;
-plot(t0, y, 'r'); hold on; % Datos originales
-plot(t_t1 + 0.02019, y_t1, 'o'); % Punto t1
-plot(t_2t1 + 0.02019, y_2t1, 'o'); % Punto 2*t1
-plot(t_3t1 + 0.02019, y_3t1, 'o'); % Punto 3*t1
-plot(to + t_off, yo); % Respuesta del sistema
-title('Respuesta del Sistema a un Escalón de 12V');
-xlabel('Tiempo [s]');
-ylabel('Velocidad Angular [rad/s]');
-grid on;
-legend('Datos Originales', 'Punto t1', 'Punto 2*t1', 'Punto 3*t1', 'Modelo Simulado');
+subplot(4, 1, 1);
+plot(t, wr); title('Velocidad Angular [Rad/seg], wr'); grid on;
+subplot(4, 1, 2);
+plot(t, ia); title('Corriente de Armadura [A], ia'); grid on;
+subplot(4, 1, 3);
+plot(t, v_m); title('Tensión [V]'); grid on;
+subplot(4, 1, 4);
+plot(t, TL); title('Torque de Carga [Nm]'); grid on;
+
+% figure;
+% plot(t_s_TL, w_s_TL, 'r'), hold on
+% plot(t_t1_TL, y_t1_TL, '.'), plot(t_2t1_TL, y_2t1_TL, '*'), plot(t_3t1_TL, y_3t1_TL, 'o')
+% plot(t_s_TL, y_id_TL, 'k')
+% legend('Real', 'Intervalo 1', 'Intervalo 2', 'Intervalo 3', 'Identificada'); 
+% legend('boxoff'); grid on
+% % 
+% % Calculos de las constantes
+% iamax = max(ia);
+% Ra = StepAmplitude / iamax;
+% Km = 1 / num_Va(3);
+% Ki = Ra * K * Km;
+% Kt = Ki;
+% J = (Ra * den_Va(3)) / (Km * StepAmplitude) - Laa * (den_Va(3) / den_Va(2));
+% Laa = Ra * den_Va(3) - Km * StepAmplitude;
+% 
+% % Imprimir resultados
+% fprintf('Ra= %.2f\n', Ra)
+% fprintf('Kt= %.2f\n', Km)
+% fprintf('Ke= %.2f\n', Ki)
+% fprintf('J= %.2f\n', J)
+% fprintf('La= %.2f\n', Laa)
