@@ -1,0 +1,98 @@
+clc;
+clear all;
+
+% Parámetros del sistema
+w = 9;
+a = 0.07;
+b = 5;
+c = 150;
+dt = 1e-4; % Tiempo de muestreo
+tf = 70; % Tiempo de simulación
+t = 0:dt:tf; % Vector de tiempo
+n = length(t);
+
+% Variables del sistema
+alfa = zeros(1, n);
+fi = zeros(1, n);
+fi_p = zeros(1, n);
+h = zeros(1, n);
+u = zeros(1, n);
+
+% Condiciones iniciales
+alfa(1) = 0.2;
+fi(1) = 100;
+h(1) = -500;
+
+% Referencia de altura
+ref = 100;
+
+% Matrices del sistema
+Mat_A = [-a a 0 0; 0 0 1 0; w^2 -w^2 0 0; c 0 0 0];
+Mat_B = [0; 0; b*w^2; 0];
+Mat_C = [0 0 0 1]; % La salida es la altura
+
+% Construcción del sistema ampliado
+Mat_Aa = [Mat_A zeros(4, 1); -Mat_C 0];
+Mat_Ba = [Mat_B; 0];
+
+% Matriz de controlabilidad
+Mat_Ma = [Mat_Ba Mat_Aa*Mat_Ba Mat_Aa^2*Mat_Ba Mat_Aa^3*Mat_Ba Mat_Aa^4*Mat_Ba];
+
+% Asignación de polos deseados
+mui = [-15 + 15j, -15 - 15j, -0.5 + 0.5j, -0.5 - 0.5j, -0.5];
+c_ai = poly(eig(Mat_Aa));
+alfa_ia = poly(mui);
+
+% Cálculo del controlador por asignación de polos
+Mat_Wa = [c_ai(5) c_ai(4) c_ai(3) c_ai(2) 1;
+          c_ai(4) c_ai(3) c_ai(2) 1 0;
+          c_ai(3) c_ai(2) 1 0 0;
+          c_ai(2) 1 0 0 0;
+          1 0 0 0 0];
+Mat_Ta = Mat_Ma * Mat_Wa;
+A_controlable = inv(Mat_Ta) * Mat_Aa * Mat_Ta; % Verificación de controlabilidad
+Ka = (alfa_ia(2:6) - c_ai(2:6)) * inv(Mat_Ta);
+K = Ka(1:4); 
+KI = -Ka(5);
+
+% Vector psi para la integral de error
+psi = zeros(1, n);
+
+% Simulación del sistema
+for i = 1:n-1
+    % Estado actual
+    estado = [alfa(i); fi(i); fi_p(i); h(i)];
+    
+    % Calculo del error y actualización de psi
+    psi_p = ref - Mat_C * estado;
+    psi(i+1) = psi(i) + psi_p * dt;
+    
+    % Calculo de la acción de control
+    u(i) = -K * estado + KI * psi(i+1);
+    
+    % Dinámica del sistema
+    alfa_p = a * (fi(i) - alfa(i));
+    fi_pp = -(w^2) * (fi(i) - alfa(i) - b * u(i));
+    h_p = c * alfa(i);
+    
+    % Integración por Euler
+    alfa(i+1) = alfa(i) + alfa_p * dt;
+    fi_p(i+1) = fi_p(i) + fi_pp * dt;
+    fi(i+1) = fi(i) + fi_p(i) * dt;
+    h(i+1) = h(i) + h_p * dt;
+end
+
+% Gráficos de resultados
+figure;
+subplot(3,2,1);
+plot(t,h,'r'); grid on; title('Altura (h)');
+subplot(3,2,2);
+plot(t,fi_p,'r'); grid on; title('Velocidad de Ángulo (\phi_p)');
+subplot(3,2,3);
+plot(t,fi,'r'); grid on; title('Ángulo de cabeceo (\phi)');
+subplot(3,2,4);
+plot(t,alfa,'r'); grid on; title('Ángulo de trayectoria (\alpha)');
+subplot(3,1,3);
+plot(t,u,'b'); grid on; title('Acción de control (u)');
+xlabel('Tiempo (s)');
+
