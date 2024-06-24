@@ -1,128 +1,135 @@
 clear all; clc;
-i = 1; 
-t_etapa = 1e-6; % Paso de tiempo de simulación
-TitaRef = pi/2; % Referencia inicial del ángulo
-tF = 0.9; % Tiempo final de simulación
-Torque = 1.15e-3; % Torque inicial
-t = 0:t_etapa:tF; % Vector de tiempo
+
+% Inicialización de variables y parámetros
+i = 1; % índice de iteración
+tiempo_etapa = 1e-6; % Paso de tiempo de simulación
+Referencia_Tita = pi/2; % Referencia inicial del ángulo
+tiempo_final = 0.9; % Tiempo final de simulación
+Par = 1.15e-3; % Torque inicial
+tiempo = 0:tiempo_etapa:tiempo_final; % Vector de tiempo
 
 % Parámetros del motor
-Laa = 366e-6; J = 5e-9; Ra = 55.6; B = 0; Ki = 6.49e-3; Km = 6.53e-3;
+Laa = 366e-6; 
+J = 5e-9; 
+Ra = 55.6; 
+B = 0; 
+Ki = 6.49e-3; 
+Km = 6.53e-3;
 
 % Inicialización de señales y estados
-u = zeros(1, length(t)); % Señal de control sin observador
-ia = zeros(1, length(t)); % Corriente del motor
-u_O = u; % Señal de control con observador
-omega = zeros(1, length(t)); % Velocidad angular del motor
-tita = zeros(1, length(t)); % Ángulo del motor
-tita(1) = pi/2; % Ángulo inicial
+control = linspace(0, 0, length(tiempo));
+corriente_ia = linspace(0, 0, length(tiempo));
+control_O = control;
+velocidad_omega = linspace(0, 0, length(tiempo));
+angulo_tita = linspace(0, 0, length(tiempo));
+angulo_tita(1) = pi/2;
 
 % Matrices del sistema
-Mat_A = [-Ra/Laa -Km/Laa 0; Ki/J -B/J 0; 0 1 0];
-Mat_B = [1/Laa; 0; 0];
-Mat_C = [0 0 1];
+Matriz_A = [-Ra/Laa -Km/Laa 0; Ki/J -B/J 0; 0 1 0];
+Matriz_B = [1/Laa; 0; 0];
+Matriz_C = [0 0 1];
 
 % Verificación de la controlabilidad
-Mat_M = [Mat_B Mat_A*Mat_B Mat_A^2*Mat_B]; % Matriz de controlabilidad
-auto_val = eig(Mat_A); % Autovalores de la matriz A
-c_ai = poly(Mat_A); % Polinomio característico
-Mat_W = [c_ai(3) c_ai(2) 1; c_ai(2) 1 0; 1 0 0];
-Mat_T = Mat_M * Mat_W;
-A_controlable = inv(Mat_T) * Mat_A * Mat_T; % Verificación de que T esté bien
+Matriz_Controlabilidad = [Matriz_B Matriz_A*Matriz_B Matriz_A^2*Matriz_B];
+valores_autos = eig(Matriz_A); % Autovalores de la matriz A
+coeficientes_autos = conv(conv([1 -valores_autos(1)], [1 -valores_autos(2)]), [1 -valores_autos(3)]);
+Matriz_W = [coeficientes_autos(3) coeficientes_autos(2) 1; coeficientes_autos(2) 1 0; 1 0 0];
+Matriz_T = Matriz_Controlabilidad * Matriz_W;
+A_controlable = inv(Matriz_T) * Matriz_A * Matriz_T; % Verificación de que T esté bien
 
 % Controlador - Ubicación de los polos de lazo cerrado
-mui = [-.5e2; -5e2+0.5i; -5e2-0.5i];
-alfa_i = poly(mui); % Polinomio deseado
-K = (alfa_i(2:end) - c_ai(2:end)) * inv(Mat_T); % Ganancia del controlador
+mui = [-0.5e2; -5e2+0.5i; -5e2-0.5i];
+alfa_i = conv(conv([1 -mui(3)], [1 -mui(2)]), [1 -mui(1)]);
+K = fliplr(alfa_i(2:4) - coeficientes_autos(2:4)) * inv(Matriz_T);
 
 % Observador - Diseño del observador
-Mat_A_O = Mat_A';
-Mat_B_O = Mat_C';
-Mat_M_Dual = [Mat_B_O Mat_A_O*Mat_B_O Mat_A_O^2*Mat_B_O]; % Matriz de controlabilidad
+Matriz_A_O = Matriz_A';
+Matriz_B_O = Matriz_C';
+Matriz_Controlabilidad_Dual = [Matriz_B_O Matriz_A_O*Matriz_B_O Matriz_A_O^2*Matriz_B_O];
 mui_o = real(mui) * 20; % Polos del observador (más rápidos que los del controlador)
-alfaO_i = poly(mui_o); % Polinomio del observador
-Mat_T_O = Mat_M_Dual * Mat_W; % Matriz de transformación del observador
-Ko = (alfaO_i(2:end) - c_ai(2:end)) * inv(Mat_T_O)'; % Ganancia del observador
+alfaO_i = conv(conv([1 -mui_o(3)], [1 -mui_o(2)]), [1 -mui_o(1)]);
+Matriz_T_O = Matriz_Controlabilidad_Dual * Matriz_W;
+Ko = (fliplr(alfaO_i(2:end) - coeficientes_autos(2:end)) * inv(Matriz_T_O))';
 
 % Inicialización del observador
-x_hat = [0; 0; 0]; % Estado estimado inicial
-x_op = [0; 0; 0]; % Punto de operación (vector columna)
+estado_estimado = [0; 0; 0]; % Estado estimado inicial
+estado_operacion = [0; 0; 0]; % Punto de operación (vector columna)
 
 % Bucle de simulación
-while i < length(t)
-    estado = [ia(i); omega(i); tita(i)]; % Estado actual del sistema
+while i < length(tiempo)
+    estado_actual = [corriente_ia(i); velocidad_omega(i); angulo_tita(i)]; % Estado actual del sistema
 
     % Controlador sin observador
-    u(i) = -K * (estado - x_op) + TitaRef;
+    control(i) = -K * (estado_actual - estado_operacion) + Referencia_Tita;
 
     % Controlador con observador
-    u_O(i) = -K * (x_hat - x_op) + TitaRef;
+    control_O(i) = -K * (estado_estimado - estado_operacion) + Referencia_Tita;
 
     % Saturación de la señal de control
-    if u(i) > 12
-        u(i) = 12;
-    elseif u(i) < -12
-        u(i) = -12;
+    if control(i) > 12
+        control(i) = 12;
+    elseif control(i) < -12
+        control(i) = -12;
     end
 
     % Dinámica del motor
-    iap = -Ra / Laa * ia(i) - Km / Laa * omega(i) + u(i) / Laa;
-    wp = Ki / J * ia(i) - B / J * omega(i) - Torque / J;
-    ia(i+1) = ia(i) + t_etapa * iap;
-    omega(i+1) = omega(i) + t_etapa * wp;
-    tita(i+1) = tita(i) + t_etapa * omega(i);
+    incremento_ia = -Ra / Laa * corriente_ia(i) - Km / Laa * velocidad_omega(i) + control(i) / Laa;
+    incremento_omega = Ki / J * corriente_ia(i) - B / J * velocidad_omega(i) - Par / J;
+    corriente_ia(i + 1) = corriente_ia(i) + tiempo_etapa * incremento_ia;
+    velocidad_omega(i + 1) = velocidad_omega(i) + tiempo_etapa * incremento_omega;
+    angulo_tita(i + 1) = angulo_tita(i) + tiempo_etapa * velocidad_omega(i);
 
     % Actualización del torque y la referencia del ángulo
-    if t(i) > 0.3
-        TitaRef = -pi/2;
-        Torque = 0;
+    if tiempo(i) > 0.3
+        Referencia_Tita = -pi/2;
+        Par = 0;
     end
-    if t(i) > 0.6
-        TitaRef = pi/2;
-        Torque = 1.15e-3;
+    if tiempo(i) > 0.6
+        Referencia_Tita = pi/2;
+        Par = 1.15e-3;
     end
 
     % Salida del sistema
-    y_sal = Mat_C * estado;
+    salida_y = Matriz_C * estado_actual;
 
     % Observador de estado
-    y_sal_O = Mat_C * x_hat;
-    x_hatp = Mat_A * x_hat + Mat_B * u_O(i) + Ko' * (y_sal - y_sal_O);
-    x_hat = x_hat + t_etapa * x_hatp;
+    salida_y_O = Matriz_C * estado_estimado;
+    incremento_estado_estimado = Matriz_A * estado_estimado + Matriz_B * control_O(i) + Ko * (salida_y - salida_y_O);
+    estado_estimado = estado_estimado + tiempo_etapa * incremento_estado_estimado;
 
     i = i + 1; % Incremento del índice de iteración
 end
 
 % Gráficas de resultados
 figure;
-subplot(4,1,1);
-plot(t, ia, 'r');
+subplot(4, 1, 1);
+plot(tiempo, corriente_ia, 'r');
 title('Corriente I_a');
 xlabel('Tiempo [s]');
 ylabel('I_a [A]');
 grid on;
 
-subplot(4,1,2);
-plot(t, tita, 'b');
+subplot(4, 1, 2);
+plot(tiempo, angulo_tita, 'b');
 hold on;
-plot(t, TitaRef * ones(size(t)), 'g--');
+plot(tiempo, Referencia_Tita * ones(size(tiempo)), 'r');
 title('Ángulo \theta');
 xlabel('Tiempo [s]');
 ylabel('\theta [rad]');
 grid on;
 legend('\theta', '\theta_{ref}');
 
-subplot(4,1,3);
-plot(t, omega, 'm');
+subplot(4, 1, 3);
+plot(tiempo, velocidad_omega, 'r');
 title('Velocidad Angular \omega');
 xlabel('Tiempo [s]');
 ylabel('\omega [rad/s]');
 grid on;
 
-subplot(4,1,4);
-plot(t, u, 'k');
+subplot(4, 1, 4);
+plot(tiempo, control, 'r');
 hold on;
-plot(t, u_O, 'c');
+plot(tiempo, control_O, 'g');
 title('Señal de Control u');
 xlabel('Tiempo [s]');
 ylabel('u [V]');
