@@ -1,0 +1,101 @@
+clear all; clc;
+i = 1;
+t_etapa = 1e-6;  % Tiempo de integración de Euler
+TitaRef = pi/2;  % Referencia inicial del ángulo
+tF = 0.9;        % Tiempo final de simulación
+Torque = 1.15e-3;% Torque de carga inicial
+t = 0:t_etapa:tF;
+
+% Parámetros del motor
+Laa = 366e-6; 
+J = 5e-9; 
+Ra = 55.6; 
+B = 0; 
+Ki = 6.49e-3; 
+Km = 6.53e-3;
+
+% Inicialización de vectores de estado
+u = zeros(1, length(t));
+ia = zeros(1, length(t));
+omega = zeros(1, length(t));
+tita = zeros(1, length(t));
+tita(1) = pi/2;
+
+% Matrices del sistema
+Mat_A = [-Ra/Laa, -Km/Laa, 0; Ki/J, -B/J, 0; 0, 1, 0];
+Mat_B = [1/Laa; 0; 0];
+Mat_C = [0, 0, 1];
+
+% Controlabilidad
+Mat_M = [Mat_B, Mat_A*Mat_B, Mat_A^2*Mat_B];
+auto_val = eig(Mat_A);
+c_ai = conv(conv([1, -auto_val(1)], [1, -auto_val(2)]), [1, -auto_val(3)]);
+Mat_W = [c_ai(3), c_ai(2), 1; c_ai(2), 1, 0; 1, 0, 0];
+Mat_T = Mat_M * Mat_W;
+A_controlable = inv(Mat_T) * Mat_A * Mat_T;
+
+% Ubicación de polos del controlador
+mui = [-.5e6; -5e5+0.5i; conj(-5e5+0.5i)];
+alfa_i = conv(conv([1, -mui(3)], [1, -mui(2)]), [1, -mui(1)]);
+K = fliplr(alfa_i(2:4) - c_ai(2:4)) * inv(Mat_T);
+eig(Mat_A - Mat_B * K);
+
+% Observador
+Mat_A_O = Mat_A';
+Mat_B_O = Mat_C';
+Mat_M_Dual = [Mat_B_O, Mat_A_O * Mat_B_O, Mat_A_O^2 * Mat_B_O];
+alfaO_i = alfa_i;
+mui_o = real(mui) * 20;
+alfaO_i = conv(conv([1, -mui_o(3)], [1, -mui_o(2)]), [1, -mui_o(1)]);
+Mat_T_O = Mat_M_Dual * Mat_W;
+Ko = (fliplr(alfaO_i(2:end) - c_ai(2:end)) * inv(Mat_T_O))';
+eig(Mat_A_O' - Ko * Mat_C);
+Gj = -inv(Mat_C * inv(Mat_A - Mat_B * K) * Mat_B);
+x_hat = [0; 0; 0];
+% Inicialización del observador
+x_op = [0, 0, 0]';
+while i < (tF / t_etapa)
+    estado = [ia(i); omega(i); tita(i)];
+    u(i) = -K * (estado - x_op) + Gj * TitaRef; % Controlador sin observador
+    
+    % Limitar la tensión a ±12V
+    if u(i) > 12
+        u(i) = 12;
+    elseif u(i) < -12
+        u(i) = -12;
+    end
+
+    % Actualización de los estados
+    wp = ia(i) * (Ki / J) - omega(i) * (B / J) - Torque / J;
+    iap = -ia(i) * (Ra / Laa) - omega(i) * (Km / Laa) + u(i) / Laa;
+    omega(i+1) = omega(i) + t_etapa * wp;
+    ia(i+1) = ia(i) + t_etapa * iap;
+    tita(i+1) = tita(i) + t_etapa * omega(i);
+    
+    % Cambiar la referencia cada 5 segundos
+    if i * t_etapa > 0.3
+        TitaRef = -pi/2;
+        Torque = 0;
+    elseif i * t_etapa > 0.6
+        TitaRef = pi/2;
+        Torque = 1.15e-3;
+    end
+    
+    acc(i+1) = u(i);
+    y_sal(i) = Mat_C * estado;
+    
+    % Observador
+    y_sal_O(i) = Mat_C * x_hat;
+    x_hatp = Mat_A * (x_hat - x_op) + Mat_B * u(i) + Ko * (y_sal(i) - y_sal_O(i));
+    x_hat = x_hat + t_etapa * x_hatp;
+    i = i + 1;
+end
+subplot(4,1,1); hold on;
+plot(t, ia, 'b'); title('Corriente ia_t');
+subplot(4,1,2); hold on;
+plot(t, tita, 'b'); title('Salida Y, tita_t');
+subplot(4,1,3); hold on;
+plot(t, omega, 'b'); title('Omega');
+xlabel('Tiempo [Seg.]');
+subplot(4,1,4); hold on;
+plot(t, acc, 'b'); title('Entrada u_t, v_a');
